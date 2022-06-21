@@ -149,7 +149,7 @@ class MainNode(Node):
        
        self.subscription = self.create_subscription(
            Bool,
-           'is_human',
+           'body_detection',
            self.IsHumanCallback,
            10)
        self.subscription  # prevent unused variable warning
@@ -174,23 +174,23 @@ class MainNode(Node):
         self.sm = smach.StateMachine(outcomes=['FINISH'])
 
         with self.sm:
-            smach.StateMachine.add('FACE_DETECTION', FaceDetection(), 
+            smach.StateMachine.add('FACE_DETECTION', FaceDetection(self), 
                                   transitions={'worker':'GESTURE_RECOGNITION', 
                                                'not_worker':'FACE_DETECTION'})
-            smach.StateMachine.add('GESTURE_RECOGNITION', GestureRecognition(), 
+            smach.StateMachine.add('GESTURE_RECOGNITION', GestureRecognition(self), 
                                   transitions={'stop':'PREPARE_FINISH',
                                                'start':'TOOL_RECOGNITION',
                                                'not_gesture':'GESTURE_RECOGNITION'})
-            smach.StateMachine.add('TOOL_RECOGNITION', ToolRecognition(), 
+            smach.StateMachine.add('TOOL_RECOGNITION', ToolRecognition(self), 
                                   transitions={'num_1':'GO_TASK',
                                                'not_tool':'TOOL_RECOGNITION'})
-            smach.StateMachine.add('GO_TASK', ExecuteTask(), 
+            smach.StateMachine.add('GO_TASK', ExecuteTask(self), 
                                   transitions={'finish':'PREPARE_FINISH',
                                                'task_work_async':'GO_TASK',
                                                'stop':'PAUSE'})                                    
             smach.StateMachine.add('PAUSE', Pause(), 
                                   transitions={'start':'GO_TASK'})
-            smach.StateMachine.add('PREPARE_FINISH', PrepareFinish(), 
+            smach.StateMachine.add('PREPARE_FINISH', PrepareFinish(self), 
                                   transitions={'success':'FINISH'})
                                   
        sis = smach_ros.IntrospectionServer('smach_introspection_server', self.sm, '/SM_ROOT')
