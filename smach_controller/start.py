@@ -38,7 +38,7 @@ class FaceDetection(smach.State):
 
 class ToolRecognition(smach.State):
     def __init__(self, node):
-        smach.State.__init__(self, outcomes=['num_1', 'not_tool'])
+        smach.State.__init__(self, outcomes=['wrench', 'not_tool'])
         self.node = node
 
     def execute(self, userdata):
@@ -58,8 +58,8 @@ class ToolRecognition(smach.State):
                         'Result of get_face: %s' % response.message)
                     curent_tool = response.message
                 break
-        if curent_tool == 'num_1':
-            return 'num_1'
+        if curent_tool == 'wrench':
+            return 'wrench'
         else:
             return 'not_tool'
 
@@ -229,7 +229,7 @@ class MainNode(Node):
                                                 'start': 'TOOL_RECOGNITION',
                                                 'not_gesture': 'GESTURE_RECOGNITION'})
             smach.StateMachine.add('TOOL_RECOGNITION', ToolRecognition(node=self),
-                                   transitions={'num_1': 'GO_TASK',
+                                   transitions={'wrench': 'GO_TASK',
                                                 'not_tool': 'TOOL_RECOGNITION'})
             smach.StateMachine.add('GO_TASK', ExecuteTask(node=self),
                                    transitions={'finish': 'PREPARE_FINISH',
