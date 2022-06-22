@@ -7,6 +7,8 @@ from rclpy.node import Node
 from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 
+INSTRUMENT = 'hammer'
+
 
 class FaceDetection(smach.State):
     def __init__(self, node):
@@ -15,7 +17,7 @@ class FaceDetection(smach.State):
 
     def execute(self, userdata):
         self.node.get_logger().info('Executing state Face Detection')
-        future = self.node.get_face.call_async(Trigger.Request())
+        future = self.node.client_face.call_async(Trigger.Request())
         curent_face = ''
         while rclpy.ok():
             rclpy.spin_once(self.node)
@@ -38,12 +40,12 @@ class FaceDetection(smach.State):
 
 class ToolRecognition(smach.State):
     def __init__(self, node):
-        smach.State.__init__(self, outcomes=['wrench', 'not_tool'])
+        smach.State.__init__(self, outcomes=[INSTRUMENT, 'not_tool'])
         self.node = node
 
     def execute(self, userdata):
         self.node.get_logger().info('Executing state Tool Recognition')
-        future = self.node.get_tool.call_async(Trigger.Request())
+        future = self.node.client_tool.call_async(Trigger.Request())
         curent_tool = ''
         while rclpy.ok():
             rclpy.spin_once(self.node)
@@ -58,8 +60,8 @@ class ToolRecognition(smach.State):
                         'Result of get_face: %s' % response.message)
                     curent_tool = response.message
                 break
-        if curent_tool == 'wrench':
-            return 'wrench'
+        if curent_tool == INSTRUMENT:
+            return INSTRUMENT
         else:
             return 'not_tool'
 
@@ -71,7 +73,7 @@ class GestureRecognition(smach.State):
 
     def execute(self, userdata):
         self.node.get_logger().info('Executing state Gesture Recognition')
-        future = self.node.get_gesture.call_async(Trigger.Request())
+        future = self.node.client_cmd.call_async(Trigger.Request())
         curent_gesture = ''
         while rclpy.ok():
             rclpy.spin_once(self.node)
@@ -103,7 +105,7 @@ class ExecuteTask(smach.State):
     def execute(self, userdata):
         self.node.get_logger().info('Executing state Main Task')
         self.node.robot_simulation.StartAsyncTask()
-        future = self.node.get_gesture.call_async(Trigger.Request())
+        future = self.node.client_cmd.call_async(Trigger.Request())
         curent_gesture = ''
         while rclpy.ok():
             rclpy.spin_once(self.node)
@@ -135,7 +137,7 @@ class Pause(smach.State):
     def execute(self, userdata):
         self. node.get_logger().info('Executing state Pause Task')
         self.node.robot_simulation.PauseTask()
-        future = self.node.get_gesture.call_async(Trigger.Request())
+        future = self.node.client_cmd.call_async(Trigger.Request())
         curent_gesture = ''
         while rclpy.ok():
             rclpy.spin_once(self.node)
@@ -199,10 +201,10 @@ class MainNode(Node):
         self.subscription  # prevent unused variable warning
 
         self.client_name = self.create_client(Trigger, 'get_name')
-        self.client_gesture = self.create_client(Trigger, 'get_gesture')
+        self.client_cmd = self.create_client(Trigger, 'get_cmd')
         self.client_tool = self.create_client(Trigger, 'get_tool')
 
-        while (not self.client_name.wait_for_service(timeout_sec=1.0)) or (not self.client_gesture.wait_for_service(timeout_sec=1.0)) or (not self.client_tool.wait_for_service(timeout_sec=1.0)):
+        while (not self.client_name.wait_for_service(timeout_sec=1.0)) or (not self.client_cmd.wait_for_service(timeout_sec=1.0)) or (not self.client_tool.wait_for_service(timeout_sec=1.0)):
             self.get_logger().info('services not available, waiting again...')
 
         self.robot_simalation = FakeRobotSimulation()
@@ -229,7 +231,7 @@ class MainNode(Node):
                                                 'start': 'TOOL_RECOGNITION',
                                                 'not_gesture': 'GESTURE_RECOGNITION'})
             smach.StateMachine.add('TOOL_RECOGNITION', ToolRecognition(node=self),
-                                   transitions={'wrench': 'GO_TASK',
+                                   transitions={INSTRUMENT: 'GO_TASK',
                                                 'not_tool': 'TOOL_RECOGNITION'})
             smach.StateMachine.add('GO_TASK', ExecuteTask(node=self),
                                    transitions={'finish': 'PREPARE_FINISH',
