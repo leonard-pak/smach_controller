@@ -193,12 +193,12 @@ class MainNode(Node):
     def __init__(self):
         super().__init__('smach_state_machine')
 
-        self.subscription = self.create_subscription(
-            Bool,
-            'body_detection',
-            self.IsHumanCallback,
-            10)
-        self.subscription  # prevent unused variable warning
+        # self.subscription = self.create_subscription(
+        #     Bool,
+        #     'body_detection',
+        #     self.IsHumanCallback,
+        #     10)
+        # self.subscription  # prevent unused variable warning
 
         self.client_name = self.create_client(Trigger, 'get_name')
         self.client_cmd = self.create_client(Trigger, 'get_cmd')
@@ -210,6 +210,8 @@ class MainNode(Node):
         self.robot_simalation = FakeRobotSimulation()
 
         self.InitStateMachine()
+
+        self.StartStateMachin()
 
     def IsHumanCallback(self, msg):
         if msg.data:
