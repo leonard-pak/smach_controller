@@ -7,8 +7,9 @@ from rclpy.node import Node
 from std_msgs.msg import Bool
 from std_srvs.srv import Trigger
 
-INSTRUMENT = 'hammer'
-
+INSTRUMENT = 'screwdriver'
+kuka_work = Bool()
+kuka_work.data = False
 
 class FaceDetection(smach.State):
     def __init__(self, node):
@@ -17,7 +18,7 @@ class FaceDetection(smach.State):
 
     def execute(self, userdata):
         self.node.get_logger().info('Executing state Face Detection')
-        future = self.node.client_face.call_async(Trigger.Request())
+        future = self.node.client_name.call_async(Trigger.Request())
         curent_face = ''
         while rclpy.ok():
             rclpy.spin_once(self.node)
@@ -32,7 +33,7 @@ class FaceDetection(smach.State):
                         'Result of get_face: %s' % response.message)
                     curent_face = response.message
                 break
-        if curent_face == 'wu_guo':
+        if curent_face == 'Wu Guo':
             return 'worker'
         else:
             return 'not_worker'
@@ -105,6 +106,7 @@ class ExecuteTask(smach.State):
     def execute(self, userdata):
         self.node.get_logger().info('Executing state Main Task')
         self.node.robot_simulation.StartAsyncTask()
+        
         future = self.node.client_cmd.call_async(Trigger.Request())
         curent_gesture = ''
         while rclpy.ok():
@@ -112,6 +114,7 @@ class ExecuteTask(smach.State):
             if future.done():
                 try:
                     response = future.result()
+                    kuka_work.data = True
                 except Exception as e:
                     self.node.get_logger().info(
                         'Service call failed %r' % (e,))
@@ -136,7 +139,7 @@ class Pause(smach.State):
 
     def execute(self, userdata):
         self. node.get_logger().info('Executing state Pause Task')
-        self.node.robot_simulation.PauseTask()
+        self.node.robot_simulation.PauseTask()      
         future = self.node.client_cmd.call_async(Trigger.Request())
         curent_gesture = ''
         while rclpy.ok():
@@ -144,6 +147,7 @@ class Pause(smach.State):
             if future.done():
                 try:
                     response = future.result()
+                    kuka_work.data = False
                 except Exception as e:
                     self.node.get_logger().info(
                         'Service call failed %r' % (e,))
@@ -165,8 +169,9 @@ class PrepareFinish(smach.State):
 
     def execute(self, userdata):
         self.node.get_logger().info('Executing state Prepare Finish Task')
-        time.sleep(10)
-        return 'start_task'
+        kuka_work.data = False
+        time.sleep(5)
+        return 'success'
 
 
 class FakeRobotSimulation():
@@ -177,17 +182,13 @@ class FakeRobotSimulation():
     def StartAsyncTask(self):
         if self.start_time == None:
             self.start_time = time.perf_counter()
-        else:
-            self.start_time = self.pause_time
-            self.pause_time = None
 
     def IsTaskFinish(self):
-        return (self.start_time - time.perf_counter) > 15.0
+        return (time.perf_counter() - self.start_time) > 15.0
 
     def PauseTask(self):
         self.pause_time = self.start_time
         self.start_time = None
-
 
 class MainNode(Node):
     def __init__(self):
@@ -203,16 +204,23 @@ class MainNode(Node):
         self.client_name = self.create_client(Trigger, 'get_name')
         self.client_cmd = self.create_client(Trigger, 'get_cmd')
         self.client_tool = self.create_client(Trigger, 'get_tool')
+         
+        self.pub_kuka = self.create_publisher(Bool, "/kuka_work", 1)
+        self.timer = self.create_timer(0.5, self.kuka_work_callback)
 
         while (not self.client_name.wait_for_service(timeout_sec=1.0)) or (not self.client_cmd.wait_for_service(timeout_sec=1.0)) or (not self.client_tool.wait_for_service(timeout_sec=1.0)):
             self.get_logger().info('services not available, waiting again...')
 
-        self.robot_simalation = FakeRobotSimulation()
+        self.robot_simulation = FakeRobotSimulation()
 
         self.InitStateMachine()
 
         self.StartStateMachin()
 
+    def kuka_work_callback(self):
+        self.pub_kuka.publish(kuka_work)
+        self.get_logger().info('Publishing kuka_work: "%s"' % kuka_work)
+        
     def IsHumanCallback(self, msg):
         if msg.data:
             self.get_logger().info('Human here!')
@@ -246,10 +254,10 @@ class MainNode(Node):
                                    transitions={'success': 'FINISH'})
 
     def StartStateMachin(self):
-        self.outcome = self.sm.execute()
         self.sis = smach_ros.IntrospectionServer(
-            'smach_introspection_server', self.sm, '/SM_ROOT')
+            'smach_state_machine_viewer', self.sm, '/SM_ROOT')
         self.sis.start()
+        self.outcome = self.sm.execute()
 
     def StopStateMachin(self):
         self.sis.stop()
@@ -260,7 +268,7 @@ def main():
 
     rclpy.init(args=None)
     node = MainNode()
-
+    
     rclpy.spin(node)
 
 
